@@ -6,16 +6,28 @@ using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
 
 namespace PreviewHandlerHost.Controls
 {
     public class PreviewHandlerHost
         : Control
     {
+        private readonly Control _innerControl;
+
         public PreviewHandlerHost()
         {
             Size = new Size(320, 240);
+
+            _innerControl = new Control
+            {
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            _innerControl.Paint += (sender, args) => OnPaint(args);
+
+            Controls.Add(_innerControl);
         }
 
         static readonly Guid PreviewHandlerId = new Guid("8895b1c6-b41f-4c1c-a562-0d564250836f");
@@ -65,7 +77,7 @@ namespace PreviewHandlerHost.Controls
         {
             Text = PreviewLoadingText;
 
-            Unload();
+            Unload(false, true);
 
             var guid = GetGuid(Path.GetExtension(filename));
 
@@ -80,7 +92,7 @@ namespace PreviewHandlerHost.Controls
             {
                 if (_previewHandler != null)
                 {
-                    Unload(true);
+                    Unload(true, false);
                 }
 
                 var iid = PreviewHandlerId;
@@ -119,12 +131,16 @@ namespace PreviewHandlerHost.Controls
 
             if (_previewHandler is IPreviewHandler ph)
             {
-                var r = ClientRectangle;
+                var r = _innerControl.ClientRectangle;
 
-                ph.SetWindow(Handle, ref r);
+                _innerControl.Visible = false;
+
+                ph.SetWindow(_innerControl.Handle, ref r);
                 ph.DoPreview();
 
-                OnPreview(new EventArgs());
+                _innerControl.Visible = true;
+
+                OnPreviewLoad(new EventArgs());
             }
         }
 
@@ -160,8 +176,14 @@ namespace PreviewHandlerHost.Controls
                 : Guid.Empty;
         }
 
-        public void Unload(
-            bool release = false)
+        public void Unload()
+        {
+            Unload(true, true);
+        }
+
+        private void Unload(
+            bool release,
+            bool dispatchEvents)
         {
             if (_previewHandler == null || !(_previewHandler is IPreviewHandler ph)) return;
 
@@ -174,17 +196,23 @@ namespace PreviewHandlerHost.Controls
                 _stream = null;
             }
 
-            if (!release) return;
-
-            Marshal.FinalReleaseComObject(_previewHandler);
-
-            _previewHandler = null;
-
-            if (_previewHandlerPtr != IntPtr.Zero)
+            if (release)
             {
-                Marshal.Release(_previewHandlerPtr);
+                Marshal.FinalReleaseComObject(_previewHandler);
 
-                _previewHandlerPtr = IntPtr.Zero;
+                _previewHandler = null;
+
+                if (_previewHandlerPtr != IntPtr.Zero)
+                {
+                    Marshal.Release(_previewHandlerPtr);
+
+                    _previewHandlerPtr = IntPtr.Zero;
+                }
+            }
+
+            if (dispatchEvents)
+            {
+                OnPreviewUnload(new EventArgs());
             }
         }
 
@@ -195,7 +223,7 @@ namespace PreviewHandlerHost.Controls
 
             if (_previewHandler is IPreviewHandler ph)
             {
-                var r = ClientRectangle;
+                var r = _innerControl.ClientRectangle;
 
                 ph.SetRect(r);
             }
@@ -239,7 +267,7 @@ namespace PreviewHandlerHost.Controls
         protected override void Dispose(
             bool disposing)
         {
-            Unload(true);
+            Unload(true, false);
 
             base.Dispose(disposing);
         }
@@ -252,7 +280,7 @@ namespace PreviewHandlerHost.Controls
             get => base.Text;
             set
             {
-                base.Text = value;
+                base.Text = _innerControl.Text = value;
 
                 Invalidate();
             }
@@ -270,12 +298,22 @@ namespace PreviewHandlerHost.Controls
         [DefaultValue("No preview handler is associated with this file type.")]
         public string NoPreviewHandlerText { get; set; } = "No preview handler is associated with this file type.";
 
-        public event EventHandler Preview;
+        public event EventHandler PreviewLoad;
 
-        protected virtual void OnPreview(
+        protected virtual void OnPreviewLoad(
             EventArgs e)
         {
-            var handler = Preview;
+            var handler = PreviewLoad;
+
+            handler?.Invoke(this, e);
+        }
+
+        public event EventHandler PreviewUnload;
+
+        protected virtual void OnPreviewUnload(
+            EventArgs e)
+        {
+            var handler = PreviewUnload;
 
             handler?.Invoke(this, e);
         }
