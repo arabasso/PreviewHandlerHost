@@ -198,6 +198,8 @@ namespace PreviewHandlerHost.Controls
 
             if (release)
             {
+                _lastGuid = Guid.Empty;
+
                 Marshal.FinalReleaseComObject(_previewHandler);
 
                 _previewHandler = null;
