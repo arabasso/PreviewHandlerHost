@@ -283,6 +283,7 @@ namespace PreviewHandlerHost.Controls
                 base.Text = _innerControl.Text = value;
 
                 Invalidate();
+                _innerControl.Invalidate();
             }
         }
 
