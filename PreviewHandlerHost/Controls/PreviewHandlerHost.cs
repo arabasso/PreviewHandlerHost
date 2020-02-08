@@ -10,7 +10,7 @@ using System.Windows.Forms;
 namespace PreviewHandlerHost.Controls
 {
     public class PreviewHandlerHost
-        : Control
+            : Control
     {
         private readonly Control _innerControl;
 
@@ -101,7 +101,7 @@ namespace PreviewHandlerHost.Controls
 
                 if (_previewHandlerPtr == IntPtr.Zero)
                 {
-                    Text = $@"{CannotCreateClassText} {guid}";
+                    Text = string.Format(@"{0} {1}", CannotCreateClassText, guid);
 
                     return;
                 }
@@ -111,26 +111,34 @@ namespace PreviewHandlerHost.Controls
                 _lastGuid = guid;
             }
 
-            if (_previewHandler is IInitializeWithFile iwi)
+            if (_previewHandler is IInitializeWithFile)
             {
+                var iwi = (IInitializeWithFile)_previewHandler;
+
                 iwi.Initialize(filename, 0);
             }
 
-            else if (_previewHandler is IInitializeWithStream iws)
+            else if (_previewHandler is IInitializeWithStream)
             {
+                var iws = (IInitializeWithStream)_previewHandler;
+
                 _stream = new StreamWrapper(File.OpenRead(filename));
 
                 iws.Initialize(_stream, 0);
             }
 
-            if (_previewHandler is IPreviewHandlerVisuals phv)
+            if (_previewHandler is IPreviewHandlerVisuals)
             {
+                var phv = (IPreviewHandlerVisuals)_previewHandler;
+
                 phv.SetBackgroundColor(ColorRefFromColor(BackColor));
                 phv.SetTextColor(ColorRefFromColor(ForeColor));
             }
 
-            if (_previewHandler is IPreviewHandler ph)
+            if (_previewHandler is IPreviewHandler)
             {
+                var ph = (IPreviewHandler)_previewHandler;
+
                 var r = _innerControl.ClientRectangle;
 
                 _innerControl.Visible = false;
@@ -163,13 +171,15 @@ namespace PreviewHandlerHost.Controls
         {
             uint length = 0;
 
-            var result = AssocQueryString(AssocF.None, AssocStr.ShellExtension, extension, $"{{{PreviewHandlerId}}}", null, ref length);
+            var result = AssocQueryString(AssocF.None, AssocStr.ShellExtension, extension,
+                string.Format("{{{0}}}", PreviewHandlerId), null, ref length);
 
             if (result != 1) return Guid.Empty;
 
             var stringBuilder = new StringBuilder((int)length);
 
-            result = AssocQueryString(AssocF.None, AssocStr.ShellExtension, extension, $"{{{PreviewHandlerId}}}", stringBuilder, ref length);
+            result = AssocQueryString(AssocF.None, AssocStr.ShellExtension, extension,
+                string.Format("{{{0}}}", PreviewHandlerId), stringBuilder, ref length);
 
             return result == 0
                 ? Guid.Parse(stringBuilder.ToString())
@@ -179,13 +189,17 @@ namespace PreviewHandlerHost.Controls
         public void Unload()
         {
             Unload(true, true);
+
+            Text = PreviewDefaultText;
         }
 
         private void Unload(
             bool release,
             bool dispatchEvents)
         {
-            if (_previewHandler == null || !(_previewHandler is IPreviewHandler ph)) return;
+            var ph = _previewHandler as IPreviewHandler;
+
+            if (ph == null) return;
 
             ph.Unload();
 
@@ -223,7 +237,9 @@ namespace PreviewHandlerHost.Controls
         {
             base.OnResize(e);
 
-            if (_previewHandler is IPreviewHandler ph)
+            var ph = _previewHandler as IPreviewHandler;
+
+            if (ph != null)
             {
                 var r = _innerControl.ClientRectangle;
 
@@ -279,7 +295,7 @@ namespace PreviewHandlerHost.Controls
         [DefaultValue("Select a file")]
         public override string Text
         {
-            get => base.Text;
+            get { return base.Text; }
             set
             {
                 base.Text = _innerControl.Text = value;
@@ -290,16 +306,36 @@ namespace PreviewHandlerHost.Controls
         }
 
         [Category("Text")]
+        [DefaultValue("Select a file")]
+        public string PreviewDefaultText
+        {
+            get { return _previewDefaultText; }
+            set { _previewDefaultText = value; }
+        }
+
+        [Category("Text")]
         [DefaultValue("Preview is loading...")]
-        public string PreviewLoadingText { get; set; } = "Preview is loading...";
+        public string PreviewLoadingText
+        {
+            get { return _previewLoadingText; }
+            set { _previewLoadingText = value; }
+        }
 
         [Category("Text")]
         [DefaultValue("Cannot create class")]
-        public string CannotCreateClassText { get; set; } = "Cannot create class";
+        public string CannotCreateClassText
+        {
+            get { return _cannotCreateClassText; }
+            set { _cannotCreateClassText = value; }
+        }
 
         [Category("Text")]
         [DefaultValue("No preview handler is associated with this file type.")]
-        public string NoPreviewHandlerText { get; set; } = "No preview handler is associated with this file type.";
+        public string NoPreviewHandlerText
+        {
+            get { return _noPreviewHandlerText; }
+            set { _noPreviewHandlerText = value; }
+        }
 
         public event EventHandler PreviewLoad;
 
@@ -308,7 +344,10 @@ namespace PreviewHandlerHost.Controls
         {
             var handler = PreviewLoad;
 
-            handler?.Invoke(this, e);
+            if (handler != null)
+            {
+                handler.Invoke(this, e);
+            }
         }
 
         public event EventHandler PreviewUnload;
@@ -318,12 +357,29 @@ namespace PreviewHandlerHost.Controls
         {
             var handler = PreviewUnload;
 
-            handler?.Invoke(this, e);
+            if (handler != null)
+            {
+                handler.Invoke(this, e);
+            }
+        }
+
+        public bool IsLoaded
+        {
+            get { return _previewHandler != null; }
+        }
+
+        public bool IsUnloaded
+        {
+            get { return !IsLoaded; }
         }
 
         private object _previewHandler;
         private IntPtr _previewHandlerPtr;
         private StreamWrapper _stream;
         private Guid _lastGuid;
+        private string _previewLoadingText = "Preview is loading...";
+        private string _cannotCreateClassText = "Cannot create class";
+        private string _noPreviewHandlerText = "No preview handler is associated with this file type.";
+        private string _previewDefaultText = "Select a file";
     }
 }
